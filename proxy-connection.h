@@ -8,10 +8,13 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <stdio.h>
+#include <string>
+#include <cstring>
 using namespace std;
 
 const int MAX_CONNECTIONS = 10;
 const int BACKLOG = 10;
+const int DEFAULT_BUFLEN = 512;
 
 typedef struct {
   int sockfd;
@@ -19,7 +22,7 @@ typedef struct {
   socklen_t sin_size;
 } param_t;
 
-void* socketConnection(void* paramaters);
+void* socketConnection(void* parameters);
 
 #endif
 
