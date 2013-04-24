@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <stdio.h>
 using namespace std;
 
 const int MAX_CONNECTIONS = 10;
