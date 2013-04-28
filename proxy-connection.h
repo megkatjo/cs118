@@ -8,8 +8,13 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <stdio.h>
+#include <iostream>
 #include <string>
 #include <cstring>
+#include <netdb.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include "http-request.h"
 using namespace std;
 
 const int MAX_CONNECTIONS = 10;
