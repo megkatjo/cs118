@@ -5,9 +5,13 @@
 #include <iostream>
 using namespace std;
 
-
 int main (int argc, char *argv[])
 {
+	//initialize global variables
+	count_connections = 0;
+	pthread_mutex_init(&count_mutex, NULL);
+	pthread_cond_init(&count_cond, NULL);
+
   // command line parsing
 	printf("come in\n");
 	int sockfd = socket(AF_INET , SOCK_STREAM, 0);
@@ -39,9 +43,20 @@ int main (int argc, char *argv[])
 		return listen_ret; // error
 	fprintf(stderr, "passed listen\n");
 	while(1){
-    
-    		// TODO: check if already have MAXCONNECTIONS
-	fprintf(stderr, "beginning while\n");   
+
+		fprintf(stderr, "beginning while\n");  
+
+		fprintf(stderr, "number of connections: %d\n", count_connections);  		
+	
+    	// check if already have MAXCONNECTIONS	
+		pthread_mutex_lock(&count_mutex);
+		if(count_connections >= MAX_CONNECTIONS){
+			pthread_cond_wait(&count_cond, &count_mutex);
+			fprintf(stderr, "passed max connections!\n"); 
+		}
+		pthread_mutex_unlock(&count_mutex);
+		
+	
 		struct sockaddr client_addr;
     
 		socklen_t sin_size = sizeof( struct sockaddr );
@@ -50,8 +65,11 @@ int main (int argc, char *argv[])
 		if(clientfd < 0)
 			return clientfd;
 	fprintf(stderr, "passed accept\n");	
-		//int select(int numfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
     
+		// update connection count
+        pthread_mutex_lock(&count_mutex);
+		count_connections++;
+        pthread_mutex_unlock(&count_mutex);
     
 		//pthreads business
     
@@ -70,7 +88,7 @@ int main (int argc, char *argv[])
     
 	}
 	// close socket
-	//close(sockfd);
+	close(sockfd);
 
 	pthread_exit(NULL);
 	return 0;

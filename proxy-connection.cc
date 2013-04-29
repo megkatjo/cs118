@@ -1,6 +1,16 @@
 #include "proxy-connection.h"
 #include "http-response.h"
 
+/*
+Global Variables
+*/
+// to count the number of connections
+int count_connections;
+// to guard number of connections
+pthread_mutex_t count_mutex;
+pthread_cond_t count_cond;
+
+
 int createSocketAndConnect(string host, unsigned short port){
   struct addrinfo hints;
   struct addrinfo *result, *rp;
@@ -135,7 +145,13 @@ void* socketConnection( void* parameters){
   //return NULL;
   //}
 
-
+	//update connection count
+	close(p->sockfd);
+    pthread_mutex_lock(&count_mutex);
+    count_connections--;
+    pthread_cond_signal(&count_cond);
+    pthread_mutex_unlock(&count_mutex);
+    pthread_exit(NULL);
 
   return NULL;
 }

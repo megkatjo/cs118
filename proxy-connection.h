@@ -21,6 +21,15 @@ const int MAX_CONNECTIONS = 10;
 const int BACKLOG = 10;
 const int DEFAULT_BUFLEN = 512;
 
+/*
+Global Variables
+*/
+// to count the number of connections
+extern int count_connections;
+// to guard number of connections
+extern pthread_mutex_t count_mutex;
+extern pthread_cond_t count_cond;
+
 typedef struct {
   int sockfd;
   struct sockaddr client_addr;
