@@ -237,21 +237,19 @@ void* socketConnection( void* parameters){
 	  //fprintf(stderr,"in while\n");
 	  char databuffer[2048];
 	  int bytesWritten = recv(hostSock,databuffer,sizeof(databuffer),0);
-	  fprintf(stderr,"recv returned %d\n",bytesWritten);
+	  //fprintf(stderr,"recv returned %d\n",bytesWritten);
 	  if (bytesWritten < 0){
 	    fprintf(stderr,"error: %d\n",errno);
 	    return NULL;
 	  }
-	  else if(bytesWritten == 0) {
-	    // didn't recieve anything, done getting data?
+	  else if(bytesWritten < 2048) {
+	    // done getting data
+		data.append(databuffer,bytesWritten);
 	    fprintf(stderr,"done getting data\n");
 	    break;
 	  }
 	  // append to data
-	  //fprintf(stderr,"appending\n");
 	  data.append(databuffer,bytesWritten);
-	  fprintf(stderr,"got: %s\n",databuffer);
-	  break;
 	}
 	fprintf(stderr,"got data\n");
 	// Add to cache
