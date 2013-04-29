@@ -17,6 +17,7 @@
 #include "http-request.h"
 #include <map>
 #include <malloc.h>
+#include <errno.h>
 using namespace std;
 
 #define PORT_NUMBER 14801

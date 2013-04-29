@@ -44,8 +44,10 @@ int createSocketAndConnect(string host, unsigned short port){
   /* Obtain address(es) matching host/port */
 
   memset(&hints, 0, sizeof(struct addrinfo));
-  hints.ai_family = AF_INET;    
-  hints.ai_socktype = SOCK_DGRAM; /* Datagram socket */
+  //hints.ai_family = AF_INET;  
+	hints.ai_family = AF_UNSPEC;  
+  //hints.ai_socktype = SOCK_DGRAM; /* Datagram socket */
+  hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = 0;
   hints.ai_protocol = 0;          /* Any protocol */
 
@@ -66,8 +68,10 @@ int createSocketAndConnect(string host, unsigned short port){
     if (sfd == -1)
       continue;
 
-    if (connect(sfd, rp->ai_addr, rp->ai_addrlen) != -1)
+    if (connect(sfd, rp->ai_addr, rp->ai_addrlen) != -1){
+		fprintf(stderr,"data: %d\n", rp->ai_addr->sa_family);
       break;                  /* Success */
+	 }
 
     close(sfd);
   }
@@ -170,13 +174,14 @@ void* socketConnection( void* parameters){
 	  port = 80;
 	  myRequest.SetPort(port);
 	}
+	
 	cout<< "host and port " << host << ": " << port << endl;
 	
 	// Format request
 	size_t req_length = myRequest.GetTotalLength() + 1;
 	char *request = (char *)malloc(req_length);
 	myRequest.FormatRequest(request);
-
+	fprintf(stderr,"formatted request: %s\n",request);
 
 	// Check if in cache already
 	string data;
@@ -217,22 +222,24 @@ void* socketConnection( void* parameters){
 	//stuff of our client)
 		  
 	// Send request to remote host
-	if(send(hostSock,request,req_length,0) < 0){
+	if(send(hostSock,request,req_length,0) == -1){
 	  // error
 	  fprintf(stderr,"could not send request to remote\n");
 	  free(request);
+	  close(hostSock);
 	  return NULL;
 	}
 	fprintf(stderr,"sent request to remote host\n");
+	fprintf(stderr,"getting data...\n");
 	// Get data from remote host
 	// Loop until we get all the data
 	while(true){
-	  fprintf(stderr,"in while\n");
-	  char databuffer[DEFAULT_BUFLEN];
-	  int bytesWritten = recv(hostSock,databuffer,DEFAULT_BUFLEN,0);
+	  //fprintf(stderr,"in while\n");
+	  char databuffer[2048];
+	  int bytesWritten = recv(hostSock,databuffer,sizeof(databuffer),0);
 	  fprintf(stderr,"recv returned %d\n",bytesWritten);
 	  if (bytesWritten < 0){
-	    fprintf(stderr,"error\n");
+	    fprintf(stderr,"error: %d\n",errno);
 	    return NULL;
 	  }
 	  else if(bytesWritten == 0) {
@@ -241,8 +248,9 @@ void* socketConnection( void* parameters){
 	    break;
 	  }
 	  // append to data
-	  fprintf(stderr,"appending\n");
+	  //fprintf(stderr,"appending\n");
 	  data.append(databuffer,bytesWritten);
+	  fprintf(stderr,"got: %s\n",databuffer);
 	  break;
 	}
 	fprintf(stderr,"got data\n");
