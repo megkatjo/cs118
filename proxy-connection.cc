@@ -1,6 +1,15 @@
 #include "proxy-connection.h"
 #include "http-response.h"
 
+//TODO ERROR CODES
+	// 502 "Bad Gateway" -> invalid response
+	// 404 "Not Found" -> not found anything matching request URI
+	// 503 "Service Unavailable" -> can't handle request right now
+	// 408 "Request Timeout"
+	// 304 "Not Modified" -> used w/ conditional GET
+	// 400 "Bad Request" -> parsing error
+	// 501 "Not Implemented" -> only get implemented
+
 /*
 Global Variables
 */
@@ -9,6 +18,17 @@ int count_connections;
 // to guard number of connections
 pthread_mutex_t count_mutex;
 pthread_cond_t count_cond;
+
+// to create error message to send back to client
+HttpResponse createErrorMessage(string error_code, string error_message)
+{
+	HttpResponse error_response;
+	error_response.SetVersion("1.1");
+	error_response.SetStatusCode(error_code);
+	error_response.SetStatusMsg(error_message);
+	
+	return error_response;
+}
 
 
 int createSocketAndConnect(string host, unsigned short port){
@@ -85,7 +105,7 @@ void* socketConnection( void* parameters){
   struct timeval tv;
   fd_set readfds;
   int n, rv;
-
+  
   while(true)
   {
     //persistent connection:  continue to listen to the socket at all times.
@@ -111,6 +131,9 @@ void* socketConnection( void* parameters){
 	if (rv < 0){
 	  fprintf(stderr, "recv failed\n");
 	  return NULL;
+	} else if (rv == 0)
+	{
+		break;
 	}
 	//recv doesn't put a \n cause it sucks so do it here:
 	recvbuf[rv]='\0';
@@ -118,10 +141,24 @@ void* socketConnection( void* parameters){
 	try{
 	  myRequest.ParseRequest(recvbuf, rv);
 	}catch(ParseException e){
-	//TODO error 400 if bad request. (send to client)
-	  fprintf(stderr, "parse exception (will send notice to client)\n");
+	//error 400 if "Bad Request". (send to client)
+	//error 501 if "Not Implemented"
+		//fprintf(stderr, "parse exception (will send notice to client)\n");
+		HttpResponse error_response;
+		//fprintf(stderr, "Exception: %s\n", e.what());		
+		if(string(e.what()).find("GET") != string::npos)
+			error_response = createErrorMessage("501", "Not Implemented");
+		else
+			error_response = createErrorMessage("400", "Bad Request");
+		char response_buffer[error_response.GetTotalLength()+1];
+		error_response.FormatResponse(response_buffer);
+		response_buffer[error_response.GetTotalLength()] = '\0';
+		//fprintf(stderr, "%s", response_buffer);
+		send(p->sockfd, response_buffer, strlen(response_buffer), 0);
+		continue;
 	}
-	//also TODO look at the parserequest code and see if it also 
+	//DONE: GetHost and GetPort don't throw exceptions
+	//look at the parserequest code and see if it also 
 	//throws a unsupported method exception and catch that and 
 	//send whatever error tho the client.
 	string host = myRequest.GetHost();
