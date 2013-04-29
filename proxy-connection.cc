@@ -85,6 +85,7 @@ void* socketConnection( void* parameters){
   struct timeval tv;
   fd_set readfds;
   int n, rv;
+  map<string, int> hostConnections;
 
   while(true)
   {
@@ -133,7 +134,23 @@ void* socketConnection( void* parameters){
 	//TODO: put the following line into an if  depending on whether 
 	//we already have a connection (question: do we want to keep the
 	//connection with the host going??) well for now we'll close it.
-	int hostSock = createSocketAndConnect(host, port);
+	char portStr[10];
+	sprintf(portStr, "%u", port);  
+	string hostPort = host + portStr;
+	map<string, int>::iterator i = hostConnections.find(hostPort);
+	int hostSock;
+	if(i != hostConnections.end())
+	{
+	  fprintf(stderr, "already have a connection :)\n");
+	  hostSock = i->second;
+	}
+	else
+	{
+	  /////add lock stuff around this part!
+	  hostSock = createSocketAndConnect(host, port);
+	  hostConnections[hostPort] = hostSock;
+	  fprintf(stderr, "created a new connection :)\n");
+	}
 	cout<<hostSock << " is the socket!\n";
 	// echo response for now
 	//TODO send request to host socket (whether new or old)
@@ -142,7 +159,6 @@ void* socketConnection( void* parameters){
 	string r(recvbuf);
 	string message = "You said: " + r;
 	send(p->sockfd,message.c_str(),strlen(message.c_str()),0);
-	close(hostSock);//// TODO maybe.  for now we close it...
       }
 
     }
