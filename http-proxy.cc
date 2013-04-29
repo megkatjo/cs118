@@ -28,7 +28,7 @@ int main (int argc, char *argv[])
 	struct sockaddr_in service;
 	service.sin_family = AF_INET;
 	service.sin_addr.s_addr = inet_addr("127.0.0.1");
-	service.sin_port = htons(14801);
+	service.sin_port = htons(PORT_NUMBER);
 	
         printf("created service\n");
 	int bind_ret = bind(sockfd, (struct sockaddr*) &service, sizeof (service));
