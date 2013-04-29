@@ -118,22 +118,31 @@ void* socketConnection( void* parameters){
 	try{
 	  myRequest.ParseRequest(recvbuf, rv);
 	}catch(ParseException e){
-	//TODO error 400 if bad request.
+	//TODO error 400 if bad request. (send to client)
 	  fprintf(stderr, "parse exception (will send notice to client)\n");
 	}
+	//also TODO look at the parserequest code and see if it also 
+	//throws a unsupported method exception and catch that and 
+	//send whatever error tho the client.
 	string host = myRequest.GetHost();
 	unsigned short port = myRequest.GetPort();
 	if (port==0){
 	  port = 80;
 	}
 	cout<< "host and port " << host << ": " << port << endl;
+	//TODO: put the following line into an if  depending on whether 
+	//we already have a connection (question: do we want to keep the
+	//connection with the host going??) well for now we'll close it.
 	int hostSock = createSocketAndConnect(host, port);
 	cout<<hostSock << " is the socket!\n";
-	// echo response for now                                                                                                                                      
+	// echo response for now
+	//TODO send request to host socket (whether new or old)
+	//and then parse the response.  (need to set the port and
+	//stuff of our client)
 	string r(recvbuf);
 	string message = "You said: " + r;
 	send(p->sockfd,message.c_str(),strlen(message.c_str()),0);
-
+	close(hostSock);//// TODO maybe.  for now we close it...
       }
 
     }
