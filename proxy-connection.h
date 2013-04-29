@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include "http-request.h"
 #include <map>
+#include <malloc.h>
 using namespace std;
 
 #define PORT_NUMBER 14801
@@ -29,7 +30,8 @@ Global Variables
 */
 // to count the number of connections
 extern int count_connections;
-typedef map<string,string> cache_t; // cache 
+typedef map<string,string> cache_t; // cache typedef
+extern cache_t cache;  // cache
 // to guard number of connections
 extern pthread_mutex_t count_mutex;
 extern pthread_cond_t count_cond;
