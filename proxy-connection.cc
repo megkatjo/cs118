@@ -32,6 +32,75 @@ HttpResponse createErrorMessage(string error_code, string error_message)
 	return error_response;
 }
 
+int getResponseHeader(string& data, bool& inHeader, bool& complete, int hostSock, int& content_length)
+{	
+	int bytesWritten;
+	size_t n = 0;
+	char databuffer[2048];
+	bytesWritten = recv(hostSock,databuffer,sizeof(databuffer),0);
+	if (bytesWritten < 0){
+	    fprintf(stderr,"error: %d\n",errno);
+	    return -1;
+	}
+	
+	data.append(databuffer,bytesWritten);
+	
+	//end of header
+	if((n = data.find("\r\n\r\n")) != string::npos)
+	{
+		inHeader = false;
+		// get body
+		string part_body = data.substr(n+4, data.length()-n-4);
+		// this is the header
+		data = data.substr(0, n+4);
+	
+		HttpResponse temp_response;
+		temp_response.ParseResponse(data.c_str(), data.length());
+		content_length = atoi(temp_response.FindHeader("Content-Length").c_str());
+		fprintf(stderr, "content-length: %d\n", content_length);
+			
+		int part_body_length = part_body.length();			
+		// done
+		if(part_body_length >= content_length)
+		{
+			data += part_body.substr(0, content_length);	
+			complete = true;				
+		}
+		// not done
+		else
+		{	
+			data += part_body;
+			content_length -= part_body_length;	
+		}
+	}
+	
+	return 0;
+}
+
+
+int getResponseData(string& data, bool& inHeader, bool& complete, int hostSock, int& content_length)
+{	
+	int bytesWritten;
+	char databuffer[2048];
+	bytesWritten = recv(hostSock,databuffer,sizeof(databuffer),0);
+	if (bytesWritten < 0){
+		fprintf(stderr,"error: %d\n",errno);
+		return -1;
+	}		
+
+	if(bytesWritten >= content_length)
+	{
+		data.append(databuffer, content_length);
+		complete = true;
+		return 0;
+	}
+
+	data.append(databuffer,bytesWritten);
+	content_length -= bytesWritten;
+	
+	return 0;
+}
+
 
 int createSocketAndConnect(string host, unsigned short port){
   struct addrinfo hints;
@@ -260,80 +329,22 @@ void* socketConnection( void* parameters){
 	fprintf(stderr,"getting data...\n");
 	// Get data from remote host
 	// Loop until we get all the data
-	int bytesWritten;
-	char databuffer[2048];
-	//bool in_header = true;
-	//figure out whr
-	//string search_for = "\r\n\r\n";
-	//int content_length = -1;
-	 //fprintf(stderr, "content length = %s\n", myRequest.FindHeader("content-length").c_str());
-	 size_t n = 0;
-	while((bytesWritten = recv(hostSock,databuffer,sizeof(databuffer),0)) > 0){
-	  //fprintf(stderr,"in while\n");
-
-		data.append(databuffer,bytesWritten);
-		if((n = data.find("\r\n\r\n")) != string::npos)
-			break;
-		//if(data.find("content-length"))
-			//content_length = atoi(myRequest.FindHeader("content-length").c_str());
-		/*string::size_type pos(0);	int num_count = 0;
-		while( (pos = data.find(search_for, pos)) != string::npos)
-		{
-			num_count++;
-			//fprintf(stderr, "substring: %s\n", data.substr(pos, string::npos).c_str());
-			pos += search_for.length();			
-		}
-		if(num_count == 1)
-			break;
-		fprintf(stderr, "num_count: %d\n", num_count);*/
-		//num_count += bytesWritten;
-		//fprintf(stderr,"bytesWritten: %d num_count: %d content_length: %d\n",bytesWritten, num_count, content_length);
-	  // append to data
-	  //data.append(databuffer,bytesWritten);
-	  	//fprintf(stderr,"data: %s\n", data.c_str());
-	}
-	if (bytesWritten < 0){
-	    fprintf(stderr,"error: %d\n",errno);
-	    return NULL;
-	}
+	int content_length;	
+	bool inHeader = true;
+	bool complete = false;
 	
-	// get body
-	string part_body = data.substr(n+4, data.length()-n-4);
-	// this is the header
-	data = data.substr(0, n+4);
-	
-	HttpResponse temp_response;
-	temp_response.ParseResponse(data.c_str(), data.length());
-	int content_length = atoi(temp_response.FindHeader("Content-Length").c_str());
-	fprintf(stderr, "content-length: %d\n", content_length);
-	
-	int part_body_length = part_body.length();
-	// done
-	if(part_body_length >= content_length)
+	// get header
+	while(inHeader)
 	{
-		data += part_body.substr(0, content_length);		
-	}
-	// not done
-	else
-	{
-		data += part_body;
-		content_length -= part_body_length;
-		while((bytesWritten = recv(hostSock,databuffer,sizeof(databuffer),0)) > 0){
-
-			if(bytesWritten >= content_length)
-			{
-				data.append(databuffer, content_length);
-				break;
-			}
-
-			data.append(databuffer,bytesWritten);
-			content_length -= bytesWritten;
-				
-		}
-		if (bytesWritten < 0){
-			fprintf(stderr,"error: %d\n",errno);
+		if(getResponseHeader(data, inHeader, complete, hostSock, content_length) < 0)
 			return NULL;
-		}		
+	}
+	
+	//get body
+	while(!inHeader && !complete)
+	{
+		if(getResponseData(data, inHeader, complete, hostSock, content_length) < 0)
+			return NULL;
 	}
 	
 	fprintf(stderr,"got data\n");
