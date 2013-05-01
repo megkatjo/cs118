@@ -24,6 +24,7 @@ using namespace std;
 #define PORT_NUMBER 14801
 
 const int MAX_CONNECTIONS = 10;
+const int MAX_HOST_CONNECTIONS = 100;
 const int BACKLOG = 10;
 const int DEFAULT_BUFLEN = 512;
 
@@ -32,8 +33,7 @@ Global Variables
 */
 // to count the number of connections
 extern int count_connections;
-typedef map<string,string> cache_t; // cache typedef
-extern cache_t cache;  // cache
+
 // to guard number of connections
 extern pthread_mutex_t count_mutex;
 extern pthread_cond_t count_cond;
@@ -44,6 +44,16 @@ typedef struct {
   struct sockaddr client_addr;
   socklen_t sin_size;
 } param_t;
+
+typedef struct {
+  string data;
+  string expired;
+  string last_modified;
+} cache_data;
+
+//typedef map<string,string> cache_t;
+typedef map<string,cache_data> cache_t; // cache typedef
+extern cache_t cache;  // cache
 
 void* socketConnection(void* parameters);
 

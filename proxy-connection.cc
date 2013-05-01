@@ -15,11 +15,13 @@ Global Variables
 */
 // to count the number of connections
 int count_connections;
+int count_hostConnections;
 cache_t cache;
 // to guard number of connections
 pthread_mutex_t count_mutex;
 pthread_cond_t count_cond;
 pthread_mutex_t cache_lock;
+pthread_mutex_t hostConn_lock;
 
 // to create error message to send back to client
 HttpResponse createErrorMessage(string error_code, string error_message)
@@ -32,6 +34,22 @@ HttpResponse createErrorMessage(string error_code, string error_message)
 	return error_response;
 }
 
+string parseDate(string header,HttpResponse temp_response){
+  string rawdate = temp_response.FindHeader(header);
+  struct tm tm;
+  strptime(rawdate.c_str(), "%a, %d %b %Y %T %Z", &tm);
+  char date[80];
+  strftime(date,sizeof(date),"%Y-%m-%d %X",&tm);
+  return date;
+}
+
+string parseRAWDate(string rawdate){
+  struct tm tm;
+  strptime(rawdate.c_str(), "%a, %d %b %Y %T %Z", &tm);
+  char date[80];
+  strftime(date,sizeof(date),"%Y-%m-%d %X",&tm);
+  return date;
+}
 
 int createSocketAndConnect(string host, unsigned short port){
   struct addrinfo hints;
@@ -209,12 +227,69 @@ void* socketConnection( void* parameters){
 	string data;
 	string path = host + myRequest.GetPath();
 	cache_t::iterator it = cache.find(path);
+	bool needToFetch = true;
+	
 	if(it != cache.end()){
 	  // Found in cache
 	  fprintf(stderr,"in cache!\n");
-	  data = it->second;
+	  
+	  // Get current time
+	  time_t now = time(0);
+	  struct tm tstruct = *localtime( &now );
+	  char today[80];
+	  strftime(today, sizeof(today), "%Y-%m-%d %X", &tstruct);
+	  
+	  cache_data cd = it->second;
+	  string exp = cd.expired;
+	  string lm = cd.last_modified;
+	  
+	  // Check if expired 
+	  
+	  if (today > exp){
+	    // Expired, need to refetch, delete old entry in cache
+		
+	    fprintf(stderr,"expired!\n");
+		fprintf(stderr,"expiration date: %s\n",exp.c_str());
+		pthread_mutex_lock(&cache_lock);
+		cache.erase(it);
+		pthread_mutex_unlock(&cache_lock);
+	  }
+	  else {
+		// Not expired, no need to check if stale
+	    fprintf(stderr,"not expired\n");
+		
+		// Find If-Modified-Since header in request
+		string rawIfModSince = myRequest.FindHeader("If-Modified-Since");
+		if(rawIfModSince != ""){
+			string ims = parseRAWDate(rawIfModSince);
+			fprintf(stderr,"IMS date: %s\n",ims.c_str());
+			/*
+			if(ims < lm){
+				// We want to refetch it!
+				
+				// Delete old entry 
+				pthread_mutex_lock(&cache_lock);
+				cache.erase(it);
+				pthread_mutex_unlock(&cache_lock);
+			}
+			else{
+				// No need to refetch
+				data = cd.data;
+				needToFetch =false;
+			}
+			*/
+			data = cd.data;
+				needToFetch =false;
+		}
+		else {
+			// Not expired, not stale => get that baby out of cache!
+			data = cd.data;
+			needToFetch =false;
+		}
+	  }
+	  
 	}
-	else {
+	if(needToFetch) {
 	  // not in cache
 	  fprintf(stderr,"not in cache\n");
 	//TODO: put the following line into an if  depending on whether 
@@ -233,9 +308,14 @@ void* socketConnection( void* parameters){
 	else
 	{
 	  /////add lock stuff around this part!
+	  pthread_mutex_lock(&hostConn_lock);
+	  if(count_hostConnections >= MAX_HOST_CONNECTIONS)
+	    continue; //just ignore the request and keep doing your thing.
 	  hostSock = createSocketAndConnect(host, port);
 	  hostConnections[hostPort] = hostSock;
 	  fprintf(stderr, "created a new connection :)\n");
+
+	  pthread_mutex_unlock(&hostConn_lock);
 	}
 	cout<<hostSock << " is the socket!\n";
 	// echo response for now
@@ -338,12 +418,22 @@ void* socketConnection( void* parameters){
 	
 	fprintf(stderr,"got data\n");
 	fprintf(stderr,"data: %s\n", data.c_str());
-	// Add to cache
+	
+	// Create cache struct
+	string expdate = parseDate("Expires",temp_response);
+	string lm = parseDate("Last-Modified",temp_response);
+	cache_data thiscache;
+	thiscache.data = data;
+	thiscache.expired = expdate.c_str();
+	thiscache.last_modified = lm.c_str();
+	
 	pthread_mutex_lock(&cache_lock);
-	cache.insert(pair<string,string>(path,data));
+	cache.insert(pair<string,cache_data>(path,thiscache));
 	pthread_mutex_unlock(&cache_lock);
+		
 	fprintf(stderr,"added to cache\n");
 	close(hostSock);
+	
 	} // end else (not in cache)
 
 	fprintf(stderr,"send data back to client\n");
@@ -377,13 +467,17 @@ void* socketConnection( void* parameters){
   //return NULL;
   //}
 
-	//update connection count
-	close(p->sockfd);
-    pthread_mutex_lock(&count_mutex);
-    count_connections--;
-    pthread_cond_signal(&count_cond);
-    pthread_mutex_unlock(&count_mutex);
-    pthread_exit(NULL);
+  //update connection count
+  close(p->sockfd);
+  pthread_mutex_lock(&hostConn_lock);
+  count_hostConnections -= hostConnections.size();
+  pthread_mutex_unlock(&hostConn_lock);
+
+  pthread_mutex_lock(&count_mutex);
+  count_connections--;
+  pthread_cond_signal(&count_cond);
+  pthread_mutex_unlock(&count_mutex);
+  pthread_exit(NULL);
 
   return NULL;
 }
