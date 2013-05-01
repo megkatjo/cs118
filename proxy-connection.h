@@ -24,6 +24,7 @@ using namespace std;
 #define PORT_NUMBER 14801
 
 const int MAX_CONNECTIONS = 10;
+const int MAX_HOST_CONNECTIONS = 100;
 const int BACKLOG = 10;
 const int DEFAULT_BUFLEN = 512;
 
