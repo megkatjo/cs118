@@ -24,8 +24,9 @@ int main (int argc, char *argv[])
 	struct sockaddr service;
 	service.sa_family = AF_INET;
 	*/
+	struct sockaddr_in service;	
+	memset(&service, 0, sizeof(service));
 	
-	struct sockaddr_in service;
 	service.sin_family = AF_INET;
 	service.sin_addr.s_addr = inet_addr("127.0.0.1");
 	service.sin_port = htons(PORT_NUMBER);
@@ -35,12 +36,16 @@ int main (int argc, char *argv[])
 	if (bind_ret < 0)
 	{
 		fprintf(stderr, "failed bind\n");
+		close(sockfd);
 		return bind_ret;
 	}
 	fprintf(stderr, "passed bind\n");
 	int listen_ret = listen(sockfd, BACKLOG);    //how many are queued
-	if (listen_ret == -1)
+	if (listen_ret < 0)
+	{
+		close(sockfd);
 		return listen_ret; // error
+	}
 	fprintf(stderr, "passed listen\n");
 	while(1){
 
@@ -58,6 +63,7 @@ int main (int argc, char *argv[])
 		
 	
 		struct sockaddr client_addr;
+		memset(&client_addr, 0, sizeof(client_addr));
     
 		socklen_t sin_size = sizeof( struct sockaddr );
     

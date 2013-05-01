@@ -134,6 +134,7 @@ pport  = conf.readline().rstrip().split(':')[1]
 sport1 = conf.readline().rstrip().split(':')[1]
 sport2 = conf.readline().rstrip().split(':')[1]
 
+
 b1 = open("./basic", "w")
 b1.write("basic\n")
 b2 = open("./basic2", "w")
@@ -151,10 +152,10 @@ server2 = ServerThread(int(sport2))
 server1.start()
 server2.start()
 
-
 client1 = ClientThread("127.0.0.1:" + pport, "http://127.0.0.1:" + sport1 + "/basic", "./basic")
 client1.start()
 client1.join()
+
 if client1.result:
     print "Basic object fetching: [" + bcolors.PASS + "PASSED" + bcolors.ENDC + "]" 
 else: 

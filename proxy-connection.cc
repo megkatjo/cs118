@@ -57,6 +57,7 @@ int createSocketAndConnect(string host, unsigned short port){
     return -1;
   }
 
+  
   /* getaddrinfo() returns a list of address structures.
        Try each address until we successfully connect(2).
        If socket(2) (or connect(2)) fails, we (close the socket
@@ -72,7 +73,7 @@ int createSocketAndConnect(string host, unsigned short port){
 		fprintf(stderr,"data: %d\n", rp->ai_addr->sa_family);
       break;                  /* Success */
 	 }
-
+ 
     close(sfd);
   }
 
@@ -100,14 +101,13 @@ int createSocketAndConnect(string host, unsigned short port){
 }
 
 void* socketConnection( void* parameters){
-  fprintf(stderr, "You are a connnection");
+  fprintf(stderr, "You are a connnection\n");
 
   param_t *p = (param_t *) parameters;
-  const char *sendbuf = "this is a test";
-  send(p->sockfd, sendbuf, (int)strlen(sendbuf), 0);
+  //const char *sendbuf = "this is a test";
+  //send(p->sockfd, sendbuf, (int)strlen(sendbuf), 0);
 
-  char recvbuf[DEFAULT_BUFLEN];
-  int recvbuflen = DEFAULT_BUFLEN-1;
+  //int recvbuflen = DEFAULT_BUFLEN-1;
   struct timeval tv;
   fd_set readfds;
   int n, rv;
@@ -127,6 +127,9 @@ void* socketConnection( void* parameters){
     tv.tv_usec = 500000;
     rv = select(n, &readfds, NULL, NULL, &tv);
 
+	string rv_data;
+	char recvbuf[DEFAULT_BUFLEN];
+	memset(&recvbuf, 0, sizeof(recvbuf));
     if (rv == -1) {
       perror("select"); // error occurred in select()
     } else if (rv == 0) {
@@ -134,19 +137,31 @@ void* socketConnection( void* parameters){
     } else {
       // one or both of the descriptors have data
       if (FD_ISSET(p->sockfd, &readfds)) {
-	rv = recv(p->sockfd, recvbuf, recvbuflen, 0);
+	  
+	  while((rv = recv(p->sockfd, recvbuf, sizeof(recvbuf), 0)) > 0){
+		rv_data.append(recvbuf, rv);
+		
+		if((rv_data.find("\r\n\r\n")) != string::npos)
+			break;
+	  	memset(&recvbuf, 0, sizeof(recvbuf));
+	  
+	  }
 	if (rv < 0){
 	  fprintf(stderr, "recv failed\n");
 	  return NULL;
 	} else if (rv == 0)
 	{
+	  fprintf(stderr, "End Connection\n");	
 		break;
 	}
+	
+	fprintf(stderr, "rv_data: %s\n", rv_data.c_str());
+	
 	//recv doesn't put a \n cause it sucks so do it here:
-	recvbuf[rv]='\0';
+	//recvbuf[rv]='\0';
 	HttpRequest myRequest;
 	try{
-	  myRequest.ParseRequest(recvbuf, rv);
+	  myRequest.ParseRequest(rv_data.c_str(), rv_data.length());
 	}catch(ParseException e){
 	//error 400 if "Bad Request". (send to client)
 	//error 501 if "Not Implemented"
@@ -161,7 +176,14 @@ void* socketConnection( void* parameters){
 		error_response.FormatResponse(response_buffer);
 		response_buffer[error_response.GetTotalLength()] = '\0';
 		//fprintf(stderr, "%s", response_buffer);
+		try{
 		send(p->sockfd, response_buffer, strlen(response_buffer), 0);
+		}
+		catch(exception e)
+		{
+			fprintf(stderr, "failed sending error message\n");
+		}
+		
 		continue;
 	}
 	//DONE: GetHost and GetPort don't throw exceptions
@@ -220,9 +242,14 @@ void* socketConnection( void* parameters){
 	//TODO send request to host socket (whether new or old)
 	//and then parse the response.  (need to set the port and
 	//stuff of our client)
-		  
+	
+	HttpResponse the_response;
+	// getResponse
+	
 	// Send request to remote host
-	if(send(hostSock,request,req_length,0) == -1){
+	try{
+	send(hostSock,request,req_length,0);
+	}catch(exception e){
 	  // error
 	  fprintf(stderr,"could not send request to remote\n");
 	  free(request);
@@ -233,25 +260,84 @@ void* socketConnection( void* parameters){
 	fprintf(stderr,"getting data...\n");
 	// Get data from remote host
 	// Loop until we get all the data
-	while(true){
+	int bytesWritten;
+	char databuffer[2048];
+	//bool in_header = true;
+	//figure out whr
+	//string search_for = "\r\n\r\n";
+	//int content_length = -1;
+	 //fprintf(stderr, "content length = %s\n", myRequest.FindHeader("content-length").c_str());
+	 size_t n = 0;
+	while((bytesWritten = recv(hostSock,databuffer,sizeof(databuffer),0)) > 0){
 	  //fprintf(stderr,"in while\n");
-	  char databuffer[2048];
-	  int bytesWritten = recv(hostSock,databuffer,sizeof(databuffer),0);
-	  //fprintf(stderr,"recv returned %d\n",bytesWritten);
-	  if (bytesWritten < 0){
+
+		data.append(databuffer,bytesWritten);
+		if((n = data.find("\r\n\r\n")) != string::npos)
+			break;
+		//if(data.find("content-length"))
+			//content_length = atoi(myRequest.FindHeader("content-length").c_str());
+		/*string::size_type pos(0);	int num_count = 0;
+		while( (pos = data.find(search_for, pos)) != string::npos)
+		{
+			num_count++;
+			//fprintf(stderr, "substring: %s\n", data.substr(pos, string::npos).c_str());
+			pos += search_for.length();			
+		}
+		if(num_count == 1)
+			break;
+		fprintf(stderr, "num_count: %d\n", num_count);*/
+		//num_count += bytesWritten;
+		//fprintf(stderr,"bytesWritten: %d num_count: %d content_length: %d\n",bytesWritten, num_count, content_length);
+	  // append to data
+	  //data.append(databuffer,bytesWritten);
+	  	//fprintf(stderr,"data: %s\n", data.c_str());
+	}
+	if (bytesWritten < 0){
 	    fprintf(stderr,"error: %d\n",errno);
 	    return NULL;
-	  }
-	  else if(bytesWritten < 2048) {
-	    // done getting data
-		data.append(databuffer,bytesWritten);
-	    fprintf(stderr,"done getting data\n");
-	    break;
-	  }
-	  // append to data
-	  data.append(databuffer,bytesWritten);
 	}
+	
+	// get body
+	string part_body = data.substr(n+4, data.length()-n-4);
+	// this is the header
+	data = data.substr(0, n+4);
+	
+	HttpResponse temp_response;
+	temp_response.ParseResponse(data.c_str(), data.length());
+	int content_length = atoi(temp_response.FindHeader("Content-Length").c_str());
+	fprintf(stderr, "content-length: %d\n", content_length);
+	
+	int part_body_length = part_body.length();
+	// done
+	if(part_body_length >= content_length)
+	{
+		data += part_body.substr(0, content_length);		
+	}
+	// not done
+	else
+	{
+		data += part_body;
+		content_length -= part_body_length;
+		while((bytesWritten = recv(hostSock,databuffer,sizeof(databuffer),0)) > 0){
+
+			if(bytesWritten >= content_length)
+			{
+				data.append(databuffer, content_length);
+				break;
+			}
+
+			data.append(databuffer,bytesWritten);
+			content_length -= bytesWritten;
+				
+		}
+		if (bytesWritten < 0){
+			fprintf(stderr,"error: %d\n",errno);
+			return NULL;
+		}		
+	}
+	
 	fprintf(stderr,"got data\n");
+	fprintf(stderr,"data: %s\n", data.c_str());
 	// Add to cache
 	pthread_mutex_lock(&cache_lock);
 	cache.insert(pair<string,string>(path,data));
@@ -260,13 +346,19 @@ void* socketConnection( void* parameters){
 	close(hostSock);
 	} // end else (not in cache)
 
+	fprintf(stderr,"send data back to client\n");
+	
 	// Send data back to client
-	if(send(p->sockfd,data.c_str(),strlen(data.c_str()),0) == -1){
+	try{
+		send(p->sockfd,data.c_str(),strlen(data.c_str()),0);
+	}catch(ParseException e){
 	  fprintf(stderr,"could not send data to client\n");
 	  free(request);
 	  return NULL;
 	}
-
+	
+	fprintf(stderr,"free request\n");
+	
 	free(request);
 	
 	//string r(recvbuf);
