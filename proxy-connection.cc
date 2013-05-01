@@ -15,11 +15,13 @@ Global Variables
 */
 // to count the number of connections
 int count_connections;
+int count_hostConnections;
 cache_t cache;
 // to guard number of connections
 pthread_mutex_t count_mutex;
 pthread_cond_t count_cond;
 pthread_mutex_t cache_lock;
+pthread_mutex_t hostConn_lock;
 
 // to create error message to send back to client
 HttpResponse createErrorMessage(string error_code, string error_message)
@@ -233,9 +235,14 @@ void* socketConnection( void* parameters){
 	else
 	{
 	  /////add lock stuff around this part!
+	  pthread_mutex_lock(&hostConn_lock);
+	  if(count_hostConnections >= MAX_HOST_CONNECTIONS)
+	    continue; //just ignore the request and keep doing your thing.
 	  hostSock = createSocketAndConnect(host, port);
 	  hostConnections[hostPort] = hostSock;
 	  fprintf(stderr, "created a new connection :)\n");
+
+	  pthread_mutex_unlock(&hostConn_lock);
 	}
 	cout<<hostSock << " is the socket!\n";
 	// echo response for now
@@ -377,13 +384,17 @@ void* socketConnection( void* parameters){
   //return NULL;
   //}
 
-	//update connection count
-	close(p->sockfd);
-    pthread_mutex_lock(&count_mutex);
-    count_connections--;
-    pthread_cond_signal(&count_cond);
-    pthread_mutex_unlock(&count_mutex);
-    pthread_exit(NULL);
+  //update connection count
+  close(p->sockfd);
+  pthread_mutex_lock(&hostConn_lock);
+  count_hostConnections -= hostConnections.size();
+  pthread_mutex_unlock(&hostConn_lock);
+
+  pthread_mutex_lock(&count_mutex);
+  count_connections--;
+  pthread_cond_signal(&count_cond);
+  pthread_mutex_unlock(&count_mutex);
+  pthread_exit(NULL);
 
   return NULL;
 }
