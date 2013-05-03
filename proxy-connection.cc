@@ -27,11 +27,9 @@ pthread_mutex_t hostConn_lock;
 string parseDate(string header,HttpResponse temp_response){
   string rawdate = temp_response.FindHeader(header);
   if (rawdate == ""){
-    fprintf(stderr,"could not find header %s to parse date",header.c_str());
     return "";
   }
   struct tm tm;
-  fprintf(stderr,"raw %s date: %s\n",header.c_str(),rawdate.c_str());
   strptime(rawdate.c_str(), "%a, %d %b %Y %T %Z", &tm);
   char date[80];
   strftime(date,sizeof(date),"%Y-%m-%d %X",&tm);
@@ -65,7 +63,6 @@ int getResponseHeader(string& data, bool& inHeader, bool& complete, int hostSock
   char databuffer[2048];
   bytesWritten = recv(hostSock,databuffer,sizeof(databuffer),0);
   if (bytesWritten < 0){
-    fprintf(stderr,"error: %d\n",errno);
     return -1;
   }
   
@@ -73,34 +70,32 @@ int getResponseHeader(string& data, bool& inHeader, bool& complete, int hostSock
   
   //end of header
   if((n = data.find("\r\n\r\n")) != string::npos)
-    {
-      
-      fprintf(stderr, "data: %s\n", data.c_str());
-      inHeader = false;
-      // get body
-      string part_body = data.substr(n+4, data.length()-n-4);
-      // this is the header
-      data = data.substr(0, n+4);
-      
-      HttpResponse temp_response;
-      temp_response.ParseResponse(data.c_str(), data.length());
-      content_length = atoi(temp_response.FindHeader("Content-Length").c_str());
-      fprintf(stderr, "content-length: %d\n", content_length);
-      
-      int part_body_length = part_body.length();			
-      // done
-      if(part_body_length >= content_length)
-	{
-	  data += part_body.substr(0, content_length);	
-	  complete = true;				
-	}
-      // not done
-      else
-	{	
-	  data += part_body;
-	  content_length -= part_body_length;	
-	}
+  {
+    
+    inHeader = false;
+    // get body
+    string part_body = data.substr(n+4, data.length()-n-4);
+    // this is the header
+    data = data.substr(0, n+4);
+    
+    HttpResponse temp_response;
+    temp_response.ParseResponse(data.c_str(), data.length());
+    content_length = atoi(temp_response.FindHeader("Content-Length").c_str());
+    
+    int part_body_length = part_body.length();			
+    // done
+    if(part_body_length >= content_length)
+     {
+       data += part_body.substr(0, content_length);	
+       complete = true;				
+     }
+    // not done
+    else
+    {	
+      data += part_body;
+      content_length -= part_body_length;	
     }
+  }
   
   return 0;
 }
@@ -111,18 +106,17 @@ int getResponseData(string& data, bool& inHeader, bool& complete, int hostSock, 
   int bytesWritten;
   char databuffer[2048];
   bytesWritten = recv(hostSock,databuffer,sizeof(databuffer),0);
-  fprintf(stderr, "content-length: %d, bytesWritten: %d\n", content_length, bytesWritten);
   if (bytesWritten < 0){
     fprintf(stderr,"error: %d\n",errno);
     return -1;
   }		
   
   if(bytesWritten >= content_length)
-    {
-      data.append(databuffer, content_length);
-      complete = true;
-      return 0;
-    }
+  {
+    data.append(databuffer, content_length);
+    complete = true;
+    return 0;
+  }
   
   data.append(databuffer,bytesWritten);
   content_length -= bytesWritten;
@@ -166,7 +160,6 @@ int createSocketAndConnect(string host, unsigned short port){
       continue;
     
     if (connect(sfd, rp->ai_addr, rp->ai_addrlen) != -1){
-      //fprintf(stderr,"data: %d\n", rp->ai_addr->sa_family);
       break;                  /* Success */
     }
     
@@ -177,14 +170,12 @@ int createSocketAndConnect(string host, unsigned short port){
     fprintf(stderr, "Could not connect\n");
     return -1;
   }
-  cout<< "returning a socket connection!"<< sfd << endl;;
   freeaddrinfo(result);           /* No longer needed */
   return sfd;
 
 }
 
 void* socketConnection( void* parameters){
-  fprintf(stderr, "You are a connnection\n");
 
   param_t *p = (param_t *) parameters;
   //const char *sendbuf = "this is a test";
@@ -196,15 +187,17 @@ void* socketConnection( void* parameters){
   int n, rv;
   map<string, int> hostConnections;
 
+  //this loops to maintain a persistent connection, using select to listen to the 
+  //client during each iteration.
   while(true)
   {
     //persistent connection:  continue to listen to the socket at all times.
     // clear the set ahead of time
     FD_ZERO(&readfds);
 
-    // add our descriptors to the set
+    // add our descriptors to the set (just the client socket)
     FD_SET(p->sockfd, &readfds);
-    //for now
+
     n = p->sockfd + 1;
     tv.tv_sec = 10;
     tv.tv_usec = 500000;
@@ -216,7 +209,7 @@ void* socketConnection( void* parameters){
     if (rv == -1) {
       perror("select"); // error occurred in select()
     } else if (rv == 0) {
-      fprintf(stderr, "Timeout occurred!  No data after 10.5 seconds.\n");
+      //timed out, just loop and try again.
     } else {
       // one or both of the descriptors have data
       if (FD_ISSET(p->sockfd, &readfds)) {
@@ -234,23 +227,17 @@ void* socketConnection( void* parameters){
 	  return NULL;
 	} else if (rv == 0)
 	  {
-	    fprintf(stderr, "End Connection\n");	
 	    break;
 	  }
 	
-	//fprintf(stderr, "rv_data: %s\n", rv_data.c_str());
 	
-	//recv doesn't put a \n cause it sucks so do it here:
-	//recvbuf[rv]='\0';
 	HttpRequest myRequest;
 	try{
 	  myRequest.ParseRequest(rv_data.c_str(), rv_data.length());
 	}catch(ParseException e){
 	  //error 400 if "Bad Request". (send to client)
 	  //error 501 if "Not Implemented"
-	  //fprintf(stderr, "parse exception (will send notice to client)\n");
 	  HttpResponse error_response;
-	  //fprintf(stderr, "Exception: %s\n", e.what());		
 	  if(string(e.what()).find("GET") != string::npos)
 	    error_response = createErrorMessage("501", "Not Implemented");
 	  else
@@ -258,7 +245,6 @@ void* socketConnection( void* parameters){
 	  char response_buffer[error_response.GetTotalLength()+1];
 	  error_response.FormatResponse(response_buffer);
 	  response_buffer[error_response.GetTotalLength()] = '\0';
-	  //fprintf(stderr, "%s", response_buffer);
 	  try{
 	    send(p->sockfd, response_buffer, strlen(response_buffer), 0);
 	  }
@@ -280,14 +266,12 @@ void* socketConnection( void* parameters){
 	  myRequest.SetPort(port);
 	}
 	
-	//cout<< "host and port " << host << ": " << port << endl;
 	
 	// Format request
 	size_t req_length = myRequest.GetTotalLength() + 1;
 	char *request = (char *)malloc(req_length);
 	myRequest.FormatRequest(request);
 	request[req_length-1] = '\0';
-	//fprintf(stderr,"formatted request: %s\n",request);
 
 	// Check if in cache already
 	string data;
@@ -300,7 +284,6 @@ void* socketConnection( void* parameters){
 	
 	if(it != cache.end()){
 	  // Found in cache
-	  fprintf(stderr,"in cache!\n");
 	  
 	  // Get current time
 	  time_t now = time(0);
@@ -314,24 +297,18 @@ void* socketConnection( void* parameters){
 	  dataInCache = cd.data;
 	  
 	  // Check if expired 
-	  fprintf(stderr,"today: %s\n",today);
-	  fprintf(stderr,"expiration date: %s\n",exp.c_str());
 	  if (exp != "" && today > exp){
 	    // Expired, need to refetch, delete old entry in cache
 	    
-	    fprintf(stderr,"EXPIRED!\n");
 	    
 	    // Add If-Modified-Since header to request
 	    myRequest.AddHeader("If-Modified-Since",last_modified);
 	    req_length = myRequest.GetTotalLength() + 1;
 	    request = (char *)malloc(req_length);
 	    myRequest.FormatRequest(request);
-	    fprintf(stderr,"MAKING THIS A CONDITIONAL GET, YALL\n");
 	  }
 	  else {
 	    // Not expired, no need to check if stale, just send back to client
-	    fprintf(stderr,"not expired\n");
-	    
 	    data = dataInCache;
 	    needToFetch =false;
 	  }
@@ -339,39 +316,30 @@ void* socketConnection( void* parameters){
 	}
 	if(needToFetch) {
 	  // not in cache
-	  fprintf(stderr,"not in cache\n");
-	  //TODO: put the following line into an if  depending on whether 
-	  //we already have a connection (question: do we want to keep the
-	  //connection with the host going??) well for now we'll close it.
+
 	  char portStr[10];
 	  sprintf(portStr, "%u", port);  
 	  string hostPort = host + portStr;
 	  map<string, int>::iterator i = hostConnections.find(hostPort);
 	  int hostSock;
+
 	  if(i != hostConnections.end())
 	  {
-	    fprintf(stderr, "already have a connection :)\n");
+	    //this means we already have a host connection.
 	    hostSock = i->second;
 	  }
 	  else
 	  {
-	    /////add lock stuff around this part!
 	    pthread_mutex_lock(&hostConn_lock);
 	    if(count_hostConnections >= MAX_HOST_CONNECTIONS)
 	      continue; //just ignore the request and keep doing your thing.
-	    fprintf(stderr, "don't have a connection\n");	  
+	    else
+	      count_hostConnections++;
 	    hostSock = createSocketAndConnect(host, port);
-	    fprintf(stderr, "finished socketandconnect\n");
 	    hostConnections[hostPort] = hostSock;
-	    //fprintf(stderr, "created a new connection :)\n");
 	    
 	    pthread_mutex_unlock(&hostConn_lock);
 	  }
-	  //cout<<hostSock << " is the socket!\n";
-	  // echo response for now
-	  //TODO send request to host socket (whether new or old)
-	  //and then parse the response.  (need to set the port and
-	  //stuff of our client)
 	  
 	  HttpResponse the_response;
 	  // getResponse
@@ -387,8 +355,6 @@ void* socketConnection( void* parameters){
 	    //return NULL;
 	    break;
 	  }
-	  //fprintf(stderr,"sent request to remote host\n");
-	  //fprintf(stderr,"getting data...\n");
 	  // Get data from remote host
 	  // Loop until we get all the data
 	  int content_length;	
@@ -408,24 +374,18 @@ void* socketConnection( void* parameters){
 	    if(getResponseData(data, inHeader, complete, hostSock, content_length) < 0)
 	      return NULL;
 	  }
-	
-	  //fprintf(stderr,"got data\n");
-	  //fprintf(stderr,"data: %s\n", data.c_str());
-	  
-	  //close(hostSock);
+
 	} // end else (not in cache)
 	
 	// Get response so we can parse it for headers and status
 	HttpResponse temp_response;
 	temp_response.ParseResponse(data.c_str(), data.length());
 	string resp_status = temp_response.GetStatusCode();
-	fprintf(stderr,"status code: %s\n",resp_status.c_str());
 	
 	// Check if we are doing a CONDITIONAL GET
 	if(atoi(resp_status.c_str()) == 304){
 	  // Not modified, send to client what we have in cache
 	  // No need to add anything to cache
-	  //fprintf(stderr,"dataToSend: %s\n", data.c_str());
 	  dataToSend = dataInCache;
 	  
 	  // Update Expires field
@@ -462,41 +422,25 @@ void* socketConnection( void* parameters){
 	  pthread_mutex_lock(&cache_lock);
 	  cache.insert(pair<string,cache_data>(path,thiscache));
 	  pthread_mutex_unlock(&cache_lock);
-	  fprintf(stderr,"added to cache\n");
 	}
 	
-	fprintf(stderr,"send data back to client\n");
-	fprintf(stderr, "%s\n", dataToSend.c_str());
-	fprintf(stderr, "%d\n", (int)strlen(dataToSend.c_str()));
 	// Send data back to client
 	try{
-	  int kk = send(p->sockfd,dataToSend.c_str(),strlen(dataToSend.c_str()),0);	
-	  fprintf(stderr, "send return value: %d\n", kk);
+	  send(p->sockfd,dataToSend.c_str(),strlen(dataToSend.c_str()),0);	
 	}catch(ParseException e){
 	  fprintf(stderr,"could not send data to client\n");
 	  free(request);
 	  return NULL;
 	}
 	
-	fprintf(stderr,"free request\n");
 	
 	free(request);
-	
-	//string r(recvbuf);
-	//string message = "You said: " + r;
-	//send(p->sockfd,message.c_str(),strlen(message.c_str()),0);
-	//close(hostSock);//// TODO maybe.  for now we close it...
 	
       }
       
     }
   }
   
-  //  int rv = recv(p->sockfd,recvbuf,recvbuflen, 0);
-  //if (rv < 0){
-  //fprintf(stderr, "recv failed\n");
-  //return NULL;
-  //}
   
   //update connection count
   close(p->sockfd);

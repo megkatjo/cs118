@@ -24,7 +24,7 @@ using namespace std;
 
 // GLOBAL VARIABLES
 
-#define PORT_NUMBER 14805
+#define PORT_NUMBER 14809
 
 const int MAX_CONNECTIONS = 10;
 const int MAX_HOST_CONNECTIONS = 100;
