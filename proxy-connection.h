@@ -21,7 +21,7 @@
 #include <errno.h>
 using namespace std;
 
-#define PORT_NUMBER 14803
+#define PORT_NUMBER 14801
 
 const int MAX_CONNECTIONS = 10;
 const int MAX_HOST_CONNECTIONS = 100;

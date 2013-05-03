@@ -13,7 +13,7 @@ int main (int argc, char *argv[])
 	pthread_cond_init(&count_cond, NULL);
 
   // command line parsing
-	printf("come in\n");
+	//printf("come in\n");
 	int sockfd = socket(AF_INET , SOCK_STREAM, 0);
 
 	if (sockfd < 0)
@@ -31,7 +31,7 @@ int main (int argc, char *argv[])
 	service.sin_addr.s_addr = inet_addr("127.0.0.1");
 	service.sin_port = htons(PORT_NUMBER);
 	
-        printf("created service\n");
+        //printf("created service\n");
 	int bind_ret = bind(sockfd, (struct sockaddr*) &service, sizeof (service));
 	if (bind_ret < 0)
 	{
@@ -40,19 +40,19 @@ int main (int argc, char *argv[])
 		close(sockfd);
 		return bind_ret;
 	}
-	fprintf(stderr, "passed bind\n");
+	//fprintf(stderr, "passed bind\n");
 	int listen_ret = listen(sockfd, BACKLOG);    //how many are queued
 	if (listen_ret < 0)
 	{
 		close(sockfd);
 		return listen_ret; // error
 	}
-	fprintf(stderr, "passed listen\n");
+	//fprintf(stderr, "passed listen\n");
 	while(1){
 
-		fprintf(stderr, "beginning while\n");  
+		//fprintf(stderr, "beginning while\n");  
 
-		fprintf(stderr, "number of connections: %d\n", count_connections);  		
+		//fprintf(stderr, "number of connections: %d\n", count_connections);  		
 	
     	// check if already have MAXCONNECTIONS	
 		pthread_mutex_lock(&count_mutex);

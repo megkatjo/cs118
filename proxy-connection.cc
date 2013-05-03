@@ -31,6 +31,7 @@ string parseDate(string header,HttpResponse temp_response){
     return "";
   }
   struct tm tm;
+  fprintf(stderr,"raw %s date: %s\n",header.c_str(),rawdate.c_str());
   strptime(rawdate.c_str(), "%a, %d %b %Y %T %Z", &tm);
   char date[80];
   strftime(date,sizeof(date),"%Y-%m-%d %X",&tm);
@@ -82,7 +83,7 @@ int getResponseHeader(string& data, bool& inHeader, bool& complete, int hostSock
 		HttpResponse temp_response;
 		temp_response.ParseResponse(data.c_str(), data.length());
 		content_length = atoi(temp_response.FindHeader("Content-Length").c_str());
-		fprintf(stderr, "content-length: %d\n", content_length);
+		//fprintf(stderr, "content-length: %d\n", content_length);
 			
 		int part_body_length = part_body.length();			
 		// done
@@ -164,7 +165,7 @@ int createSocketAndConnect(string host, unsigned short port){
       continue;
 
     if (connect(sfd, rp->ai_addr, rp->ai_addrlen) != -1){
-		fprintf(stderr,"data: %d\n", rp->ai_addr->sa_family);
+		//fprintf(stderr,"data: %d\n", rp->ai_addr->sa_family);
       break;                  /* Success */
 	 }
  
@@ -249,7 +250,7 @@ void* socketConnection( void* parameters){
 		break;
 	}
 	
-	fprintf(stderr, "rv_data: %s\n", rv_data.c_str());
+	//fprintf(stderr, "rv_data: %s\n", rv_data.c_str());
 	
 	//recv doesn't put a \n cause it sucks so do it here:
 	//recvbuf[rv]='\0';
@@ -291,14 +292,14 @@ void* socketConnection( void* parameters){
 	  myRequest.SetPort(port);
 	}
 	
-	cout<< "host and port " << host << ": " << port << endl;
+	//cout<< "host and port " << host << ": " << port << endl;
 	
 	// Format request
 	size_t req_length = myRequest.GetTotalLength() + 1;
 	char *request = (char *)malloc(req_length);
 	myRequest.FormatRequest(request);
 	request[req_length-1] = '\0';
-	fprintf(stderr,"formatted request: %s\n",request);
+	//fprintf(stderr,"formatted request: %s\n",request);
 
 	// Check if in cache already
 	string data;
@@ -315,7 +316,7 @@ void* socketConnection( void* parameters){
 	  
 	  // Get current time
 	  time_t now = time(0);
-	  struct tm tstruct = *localtime( &now );
+	  struct tm tstruct = *gmtime( &now );
 	  char today[80];
 	  strftime(today, sizeof(today), "%Y-%m-%d %X", &tstruct);
 	  
@@ -325,13 +326,14 @@ void* socketConnection( void* parameters){
 	  dataInCache = cd.data;
 	  
 	  // Check if expired 
-	  
+	  fprintf(stderr,"today: %s\n",today);
+	  fprintf(stderr,"expiration date: %s\n",exp.c_str());
 	  if (exp != "" && today > exp){
 	    // Expired, need to refetch, delete old entry in cache
 		
-	    fprintf(stderr,"expired!\n");
-		fprintf(stderr,"today: %s\n",today);
-		fprintf(stderr,"expiration date: %s\n",exp.c_str());
+	    fprintf(stderr,"EXPIRED!\n");
+		//fprintf(stderr,"today: %s\n",today);
+		//fprintf(stderr,"expiration date: %s\n",exp.c_str());
 		
 		//pthread_mutex_lock(&cache_lock);
 		//cache.erase(it);
@@ -394,7 +396,7 @@ void* socketConnection( void* parameters){
 	int hostSock;
 	if(i != hostConnections.end())
 	{
-	  fprintf(stderr, "already have a connection :)\n");
+	  //fprintf(stderr, "already have a connection :)\n");
 	  hostSock = i->second;
 	}
 	else
@@ -405,11 +407,11 @@ void* socketConnection( void* parameters){
 	    continue; //just ignore the request and keep doing your thing.
 	  hostSock = createSocketAndConnect(host, port);
 	  hostConnections[hostPort] = hostSock;
-	  fprintf(stderr, "created a new connection :)\n");
+	  //fprintf(stderr, "created a new connection :)\n");
 
 	  pthread_mutex_unlock(&hostConn_lock);
 	}
-	cout<<hostSock << " is the socket!\n";
+	//cout<<hostSock << " is the socket!\n";
 	// echo response for now
 	//TODO send request to host socket (whether new or old)
 	//and then parse the response.  (need to set the port and
@@ -428,8 +430,8 @@ void* socketConnection( void* parameters){
 	  close(hostSock);
 	  return NULL;
 	}
-	fprintf(stderr,"sent request to remote host\n");
-	fprintf(stderr,"getting data...\n");
+	//fprintf(stderr,"sent request to remote host\n");
+	//fprintf(stderr,"getting data...\n");
 	// Get data from remote host
 	// Loop until we get all the data
 	int content_length;	
@@ -450,8 +452,8 @@ void* socketConnection( void* parameters){
 			return NULL;
 	}
 	
-	fprintf(stderr,"got data\n");
-	fprintf(stderr,"data: %s\n", data.c_str());
+	//fprintf(stderr,"got data\n");
+	//fprintf(stderr,"data: %s\n", data.c_str());
 	
 	//close(hostSock);
 	} // end else (not in cache)
@@ -502,7 +504,7 @@ void* socketConnection( void* parameters){
 		fprintf(stderr,"added to cache\n");
 	}
 	
-	fprintf(stderr,"send data back to client\n");
+	//fprintf(stderr,"send data back to client\n");
 	
 	// Send data back to client
 	try{
@@ -513,7 +515,7 @@ void* socketConnection( void* parameters){
 	  return NULL;
 	}
 	
-	fprintf(stderr,"free request\n");
+	//fprintf(stderr,"free request\n");
 	
 	free(request);
 	
