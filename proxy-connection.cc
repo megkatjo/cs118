@@ -23,6 +23,29 @@ pthread_cond_t count_cond;
 pthread_mutex_t cache_lock;
 pthread_mutex_t hostConn_lock;
 
+// Used for cache purposes
+string parseDate(string header,HttpResponse temp_response){
+  string rawdate = temp_response.FindHeader(header);
+  if (rawdate == ""){
+    fprintf(stderr,"could not find header %s to parse date",header.c_str());
+    return "";
+  }
+  struct tm tm;
+  strptime(rawdate.c_str(), "%a, %d %b %Y %T %Z", &tm);
+  char date[80];
+  strftime(date,sizeof(date),"%Y-%m-%d %X",&tm);
+  return date;
+}
+
+// Used for cache purposes
+string parseRAWDate(string rawdate){
+  struct tm tm;
+  strptime(rawdate.c_str(), "%a, %d %b %Y %T %Z", &tm);
+  char date[80];
+  strftime(date,sizeof(date),"%Y-%m-%d %X",&tm);
+  return date;
+}
+
 // to create error message to send back to client
 HttpResponse createErrorMessage(string error_code, string error_message)
 {
@@ -32,23 +55,6 @@ HttpResponse createErrorMessage(string error_code, string error_message)
 	error_response.SetStatusMsg(error_message);
 	
 	return error_response;
-}
-
-string parseDate(string header,HttpResponse temp_response){
-  string rawdate = temp_response.FindHeader(header);
-  struct tm tm;
-  strptime(rawdate.c_str(), "%a, %d %b %Y %T %Z", &tm);
-  char date[80];
-  strftime(date,sizeof(date),"%Y-%m-%d %X",&tm);
-  return date;
-}
-
-string parseRAWDate(string rawdate){
-  struct tm tm;
-  strptime(rawdate.c_str(), "%a, %d %b %Y %T %Z", &tm);
-  char date[80];
-  strftime(date,sizeof(date),"%Y-%m-%d %X",&tm);
-  return date;
 }
 
 int getResponseHeader(string& data, bool& inHeader, bool& complete, int hostSock, int& content_length)
@@ -298,6 +304,9 @@ void* socketConnection( void* parameters){
 	string path = host + myRequest.GetPath();
 	cache_t::iterator it = cache.find(path);
 	bool needToFetch = true;
+	string last_modified;
+	string dataInCache;
+	string dataToSend;
 	
 	if(it != cache.end()){
 	  // Found in cache
@@ -311,31 +320,42 @@ void* socketConnection( void* parameters){
 	  
 	  cache_data cd = it->second;
 	  string exp = cd.expired;
-	  string lm = cd.last_modified;
+	  last_modified = cd.last_modified;
+	  dataInCache = cd.data;
 	  
 	  // Check if expired 
 	  
-	  if (today > exp){
+	  if (exp != "" && today > exp){
 	    // Expired, need to refetch, delete old entry in cache
 		
 	    fprintf(stderr,"expired!\n");
+		fprintf(stderr,"today: %s\n",today);
 		fprintf(stderr,"expiration date: %s\n",exp.c_str());
-		pthread_mutex_lock(&cache_lock);
-		cache.erase(it);
-		pthread_mutex_unlock(&cache_lock);
+		
+		//pthread_mutex_lock(&cache_lock);
+		//cache.erase(it);
+		//pthread_mutex_unlock(&cache_lock);
+		
+		// Add If-Modified-Since header to request
+		myRequest.AddHeader("If-Modified-Since",last_modified);
+		req_length = myRequest.GetTotalLength() + 1;
+		request = (char *)malloc(req_length);
+		myRequest.FormatRequest(request);
+		fprintf(stderr,"MAKING THIS A CONDITIONAL GET, YALL\n");
 	  }
 	  else {
-		// Not expired, no need to check if stale
+		// Not expired, no need to check if stale, just send back to client
 	    fprintf(stderr,"not expired\n");
 		
+		/*
 		// Find If-Modified-Since header in request
 		string rawIfModSince = myRequest.FindHeader("If-Modified-Since");
 		if(rawIfModSince != ""){
 			string ims = parseRAWDate(rawIfModSince);
 			fprintf(stderr,"IMS date: %s\n",ims.c_str());
-			/*
+			
 			if(ims < lm){
-				// We want to refetch it!
+			  // Been modified, need to refetch
 				
 				// Delete old entry 
 				pthread_mutex_lock(&cache_lock);
@@ -343,19 +363,20 @@ void* socketConnection( void* parameters){
 				pthread_mutex_unlock(&cache_lock);
 			}
 			else{
-				// No need to refetch
-				data = cd.data;
-				needToFetch =false;
+			  // Hasn't been modified, send back 304
+			 
 			}
-			*/
-			data = cd.data;
-				needToFetch =false;
+			
+		       
 		}
 		else {
 			// Not expired, not stale => get that baby out of cache!
 			data = cd.data;
 			needToFetch =false;
 		}
+		*/
+		data = dataInCache;
+		needToFetch =false;
 	  }
 	  
 	}
@@ -431,28 +452,60 @@ void* socketConnection( void* parameters){
 	fprintf(stderr,"got data\n");
 	fprintf(stderr,"data: %s\n", data.c_str());
 	
-	// Create cache struct
-	string expdate = parseDate("Expires",the_response);
-	string lm = parseDate("Last-Modified",the_response);
-	cache_data thiscache;
-	thiscache.data = data;
-	thiscache.expired = expdate.c_str();
-	thiscache.last_modified = lm.c_str();
-	
-	pthread_mutex_lock(&cache_lock);
-	cache.insert(pair<string,cache_data>(path,thiscache));
-	pthread_mutex_unlock(&cache_lock);
-		
-	fprintf(stderr,"added to cache\n");
 	close(hostSock);
-	
 	} // end else (not in cache)
 
+	// Get response so we can parse it for headers and status
+	HttpResponse temp_response;
+	temp_response.ParseResponse(data.c_str(), data.length());
+	string resp_status = temp_response.GetStatusCode();
+	fprintf(stderr,"status code: %s\n",resp_status.c_str());
+	
+	// Check if we are doing a CONDITIONAL GET
+	if(atoi(resp_status.c_str()) == 304){
+		// Not modified, send to client what we have in cache
+		// No need to add anything to cache
+		dataToSend = dataInCache;
+		
+		// Update Expires field
+		if(it != cache.end()){
+			string expdate = parseDate("Expires",temp_response);
+			it->second.expired = expdate.c_str();
+		}
+	}
+	else{
+		dataToSend = data;
+		
+		// Delete old entry, if applicable
+		if(it != cache.end()){
+			// Delete old entry
+			pthread_mutex_lock(&cache_lock);
+			cache.erase(it);
+			pthread_mutex_unlock(&cache_lock);
+		}
+		
+		// Parse response for info
+		string expdate = parseDate("Expires",temp_response);
+		string lm = parseDate("Last-Modified",temp_response);
+	
+		// Create new entry
+		cache_data thiscache;
+		thiscache.expired = expdate.c_str();
+		thiscache.last_modified = lm.c_str();
+		thiscache.data = data;
+		
+		// Insert into cache
+		pthread_mutex_lock(&cache_lock);
+		cache.insert(pair<string,cache_data>(path,thiscache));
+		pthread_mutex_unlock(&cache_lock);
+		fprintf(stderr,"added to cache\n");
+	}
+	
 	fprintf(stderr,"send data back to client\n");
 	
 	// Send data back to client
 	try{
-		send(p->sockfd,data.c_str(),strlen(data.c_str()),0);
+		send(p->sockfd,dataToSend.c_str(),strlen(dataToSend.c_str()),0);
 	}catch(ParseException e){
 	  fprintf(stderr,"could not send data to client\n");
 	  free(request);
