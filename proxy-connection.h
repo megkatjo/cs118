@@ -21,23 +21,21 @@
 #include <errno.h>
 using namespace std;
 
-#define PORT_NUMBER 14803
+
+// GLOBAL VARIABLES
+
+#define PORT_NUMBER 14805
 
 const int MAX_CONNECTIONS = 10;
 const int MAX_HOST_CONNECTIONS = 100;
 const int BACKLOG = 10;
 const int DEFAULT_BUFLEN = 512;
 
-/*
-Global Variables
-*/
-// to count the number of connections
-extern int count_connections;
 
-// to guard number of connections
-extern pthread_mutex_t count_mutex;
+extern int count_connections; 			// to count the number of connections
+extern pthread_mutex_t count_mutex;		// to guard number of connections
 extern pthread_cond_t count_cond;
-extern pthread_mutex_t cache_lock; // cache lock
+extern pthread_mutex_t cache_lock; 		// cache lock
 
 typedef struct {
   int sockfd;
@@ -51,9 +49,8 @@ typedef struct {
   string last_modified;
 } cache_data;
 
-//typedef map<string,string> cache_t;
-typedef map<string,cache_data> cache_t; // cache typedef
-extern cache_t cache;  // cache
+typedef map<string,cache_data> cache_t; 	// cache map
+extern cache_t cache;  						// cache (global variable)
 
 void* socketConnection(void* parameters);
 
