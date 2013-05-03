@@ -36,6 +36,7 @@ int main (int argc, char *argv[])
 	if (bind_ret < 0)
 	{
 		fprintf(stderr, "failed bind\n");
+                fprintf(stderr, "errno: %d",errno);
 		close(sockfd);
 		return bind_ret;
 	}
