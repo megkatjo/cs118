@@ -297,6 +297,7 @@ void* socketConnection( void* parameters){
 	size_t req_length = myRequest.GetTotalLength() + 1;
 	char *request = (char *)malloc(req_length);
 	myRequest.FormatRequest(request);
+	request[req_length-1] = '\0';
 	fprintf(stderr,"formatted request: %s\n",request);
 
 	// Check if in cache already
