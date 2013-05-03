@@ -74,6 +74,8 @@ int getResponseHeader(string& data, bool& inHeader, bool& complete, int hostSock
 	//end of header
 	if((n = data.find("\r\n\r\n")) != string::npos)
 	{
+	
+		fprintf(stderr, "data: %s\n", data.c_str());
 		inHeader = false;
 		// get body
 		string part_body = data.substr(n+4, data.length()-n-4);
@@ -83,7 +85,7 @@ int getResponseHeader(string& data, bool& inHeader, bool& complete, int hostSock
 		HttpResponse temp_response;
 		temp_response.ParseResponse(data.c_str(), data.length());
 		content_length = atoi(temp_response.FindHeader("Content-Length").c_str());
-		//fprintf(stderr, "content-length: %d\n", content_length);
+		fprintf(stderr, "content-length: %d\n", content_length);
 			
 		int part_body_length = part_body.length();			
 		// done
@@ -109,6 +111,7 @@ int getResponseData(string& data, bool& inHeader, bool& complete, int hostSock, 
 	int bytesWritten;
 	char databuffer[2048];
 	bytesWritten = recv(hostSock,databuffer,sizeof(databuffer),0);
+	fprintf(stderr, "content-length: %d, bytesWritten: %d\n", content_length, bytesWritten);
 	if (bytesWritten < 0){
 		fprintf(stderr,"error: %d\n",errno);
 		return -1;
@@ -396,7 +399,7 @@ void* socketConnection( void* parameters){
 	int hostSock;
 	if(i != hostConnections.end())
 	{
-	  //fprintf(stderr, "already have a connection :)\n");
+	  fprintf(stderr, "already have a connection :)\n");
 	  hostSock = i->second;
 	}
 	else
@@ -405,7 +408,9 @@ void* socketConnection( void* parameters){
 	  pthread_mutex_lock(&hostConn_lock);
 	  if(count_hostConnections >= MAX_HOST_CONNECTIONS)
 	    continue; //just ignore the request and keep doing your thing.
+	  fprintf(stderr, "don't have a connection\n");	  
 	  hostSock = createSocketAndConnect(host, port);
+	  fprintf(stderr, "finished socketandconnect\n");
 	  hostConnections[hostPort] = hostSock;
 	  //fprintf(stderr, "created a new connection :)\n");
 
@@ -427,8 +432,9 @@ void* socketConnection( void* parameters){
 	  // error
 	  fprintf(stderr,"could not send request to remote\n");
 	  free(request);
-	  close(hostSock);
-	  return NULL;
+	  //close(hostSock);
+	  //return NULL;
+	  break;
 	}
 	//fprintf(stderr,"sent request to remote host\n");
 	//fprintf(stderr,"getting data...\n");
@@ -468,11 +474,14 @@ void* socketConnection( void* parameters){
 	if(atoi(resp_status.c_str()) == 304){
 		// Not modified, send to client what we have in cache
 		// No need to add anything to cache
+		//fprintf(stderr,"dataToSend: %s\n", data.c_str());
 		dataToSend = dataInCache;
 		
 		// Update Expires field
 		if(it != cache.end()){
 			string expdate = parseDate("Expires",temp_response);
+			//string expdate = temp_response.FindHeader("Expires");
+			
 			it->second.expired = expdate.c_str();
 		}
 	}
@@ -489,7 +498,8 @@ void* socketConnection( void* parameters){
 		
 		// Parse response for info
 		string expdate = parseDate("Expires",temp_response);
-		string lm = parseDate("Last-Modified",temp_response);
+		//string lm = parseDate("Last-Modified",temp_response);
+		string lm = temp_response.FindHeader("Last-Modified");
 	
 		// Create new entry
 		cache_data thiscache;
@@ -504,18 +514,20 @@ void* socketConnection( void* parameters){
 		fprintf(stderr,"added to cache\n");
 	}
 	
-	//fprintf(stderr,"send data back to client\n");
-	
+	fprintf(stderr,"send data back to client\n");
+				fprintf(stderr, "%s\n", dataToSend.c_str());
+			fprintf(stderr, "%d\n", (int)strlen(dataToSend.c_str()));
 	// Send data back to client
 	try{
-		send(p->sockfd,dataToSend.c_str(),strlen(dataToSend.c_str()),0);
+		int kk = send(p->sockfd,dataToSend.c_str(),strlen(dataToSend.c_str()),0);	
+			fprintf(stderr, "send return value: %d\n", kk);
 	}catch(ParseException e){
 	  fprintf(stderr,"could not send data to client\n");
 	  free(request);
 	  return NULL;
 	}
 	
-	//fprintf(stderr,"free request\n");
+	fprintf(stderr,"free request\n");
 	
 	free(request);
 	
