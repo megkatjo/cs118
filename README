@@ -1,32 +1,23 @@
-General
-=======
+CODE:
 
-To learn more about ./waf, refer to http://code.google.com/p/waf/
-and http://waf.googlecode.com/svn/docs/wafbook/single.html
+We have altered/added these files:
 
-Ideally, you will need only to add your source files in wscript, which is basically a Python program.
+1. http-proxy.cc
+After creating, binding, and listening to a socket, we implemented a loop that runs continuously to listens continually to the clients wanting to connect to it. If we have enough room (i.e. we have less than max connections = 10), we create a thread for it and pass it the necessary information.
 
-How to use skeleton
-===================
+2. proxy-connection.cc / proxy-connection.h
+These files implement the work that each thread executes. The header file contains global variables and function declarations. The .cc file contains all the implementations of the functions. We first use select to create a persistent connection. Then, we receive the request (and end this connection if no bytes are read from the connection). We check for errors and return the appropriate response.
+We then format the request while checking the port and host. We then check the cache to see if it's already there. If it's not expired, we simply return the cached response. If it's expired or not in the case, we query the host for a response and send it to the client. We update the cache with the new response.
+If the connection is closed, we close all hosts and the client.
 
-Due to restrictions on lnxsrv, several steps necessary to compile and run (if you're using this skeleton):
 
-1. The following lines should be added to your ~/.bashrc
+DESIGN DECISIONS:
 
-export PATH=/usr/local/cs/bin:$PATH
-export LD_LIBRARY_PATH=/u/cs/grad/yingdi/boost/lib:/usr/local/lib64/:$LD_LIBRARY_PATH
+1. Caching - We check the expired time to see if we need to pull from the check.
 
-2. To configure environment
+2. Checking if response/request are done - We check for the "\r\n\r\n" for the request, and we check to see if the body has the same number of bytes as "Content-Length."
 
-./waf configure
+3. Locks - We used pthread_mutex locks because we used pthreads. We used shared data to keep track of how many connections we hold at one time.
 
-If there are any errors, please email me.
-
-3. To build/rebuild the code
-
-./waf
-
-4. All compiled executables are located in build/, so you can run them as this:
-
-build/http-proxy
+4. Persistent Connection - We used select to keep the connection open until it was intentionally closed.
 

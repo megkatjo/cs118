@@ -1,0 +1,26 @@
+//TEAM file
+
+Partner #1:
+Name: Amy Lin
+UID: 903929105
+Parts Written:
+I wrote the error message functions and implemented some of the error codes to send as an HttpRequest. I implemented the getHeader + getResponse sections. Also, I wrote the max connections check.
+
+
+Partner #2:
+Name: Megan Johnson
+UID: 503790394
+Parts Written:
+I wrote the cache section, including the parseDate sections. I also implemented the conditional GET section, which included the logic to send either a response from the cache or get new data.
+
+
+Partner #3:
+Name: Suzanna Whiteside
+UID: 603783185
+Parts Written:
+I wrote the max host connections check. I also wrote the create socket and connect sections. I implemented the persistent connection, as well as the set-up for receiving the request.
+
+
+Note:
+For the rest of the code, we wrote most of it together. We helped each other with every part. TEAMWORK!
+
