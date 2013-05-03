@@ -68,11 +68,11 @@ HttpHeaders::ParseHeaders (const char *buffer, size_t size)
             {
               throw ParseException ("HTTP header doesn't contain ':'");
             }
-
           key = string (curPos, header_key-curPos);
           value = string (header_key+1, endline - header_key - 1);
           boost::trim (value); // remove any leading spaces if present
-      
+          //store all as lower case
+          boost::to_lower(key);
           // TRACE ("Key: [" << key << "], value: [" << value << "]");
 
           ModifyHeader (key, value);
@@ -129,13 +129,17 @@ HttpHeaders::FormatHeaders (char *buffer) const
 void
 HttpHeaders::AddHeader (const std::string &key, const std::string &value)
 {
-  m_headers.push_back (HttpHeader (key, value));
+  std::string lowerKey = key;
+  boost::to_lower(lowerKey);
+  m_headers.push_back (HttpHeader (lowerKey, value));
 }
 
 void
 HttpHeaders::RemoveHeader (const std::string &key)
 {
-  std::list<HttpHeader>::iterator item = std::find (m_headers.begin (), m_headers.end (), key);
+  std::string lowerKey = key;
+  boost::to_lower(lowerKey);
+  std::list<HttpHeader>::iterator item = std::find (m_headers.begin (), m_headers.end (), lowerKey);
   if (item != m_headers.end ())
     m_headers.erase (item);
 }
@@ -143,7 +147,9 @@ HttpHeaders::RemoveHeader (const std::string &key)
 void
 HttpHeaders::ModifyHeader (const std::string &key, const std::string &value)
 {
-  std::list<HttpHeader>::iterator item = std::find (m_headers.begin (), m_headers.end (), key);
+  std::string lowerKey = key;
+  boost::to_lower(lowerKey);
+  std::list<HttpHeader>::iterator item = std::find (m_headers.begin (), m_headers.end (), lowerKey);
   if (item != m_headers.end ())
     item->m_value = value;
   else
@@ -153,7 +159,9 @@ HttpHeaders::ModifyHeader (const std::string &key, const std::string &value)
 std::string
 HttpHeaders::FindHeader (const std::string &key)
 {
-  std::list<HttpHeader>::iterator item = std::find (m_headers.begin (), m_headers.end (), key);
+  std::string lowerKey = key;
+  boost::to_lower(lowerKey);
+  std::list<HttpHeader>::iterator item = std::find (m_headers.begin (), m_headers.end (), lowerKey);
   if (item != m_headers.end ())
     return item->m_value;
   else
