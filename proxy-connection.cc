@@ -452,7 +452,7 @@ void* socketConnection( void* parameters){
 	fprintf(stderr,"got data\n");
 	fprintf(stderr,"data: %s\n", data.c_str());
 	
-	close(hostSock);
+	//close(hostSock);
 	} // end else (not in cache)
 
 	// Get response so we can parse it for headers and status
@@ -535,6 +535,11 @@ void* socketConnection( void* parameters){
   //update connection count
   close(p->sockfd);
   pthread_mutex_lock(&hostConn_lock);
+  map<string, int>::iterator i;
+  for(i = hostConnections.begin(); i != hostConnections.end(); i++)
+  {
+	close(i->second);
+  }
   count_hostConnections -= hostConnections.size();
   pthread_mutex_unlock(&hostConn_lock);
 
